@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <future>
 
 uint16_t read16(const std::vector<uint8_t>& data, size_t offset, bool little_endian) {
     if (little_endian) {
@@ -97,8 +98,11 @@ void Main() {
     std::vector<std::string> jpg_files;
     std::vector<Texture> textures;
     std::vector<int> orientations;
+    std::vector<bool> selected;
 
     int file_idx = 0;
+
+    std::vector<std::future<int>> raw_futures;
 
     while (System::Update()) {
 
@@ -108,6 +112,7 @@ void Main() {
                 textures.emplace_back(texture);
                 int orientation = getOrientation(jpg_files[file_idx]);
                 orientations.emplace_back(orientation);
+                selected.emplace_back(false);
             }
             if (orientations[file_idx] == 6) {
                 textures[file_idx].scaled(scale_v).rotated(90_deg).draw(IMG_WIDTH * (scale - scale_v) / 2, IMG_HEIGHT * (scale - scale_v) / 2);
@@ -118,16 +123,32 @@ void Main() {
             } else {
                 textures[file_idx].scaled(scale).draw(0, 0);
             }
-            //textures[file_idx].scaled(scale).draw(0, 0);
+            if (selected[file_idx]) {
+                font(U"Selected").draw(30, Arg::topLeft(0, 0), Palette::Red);
+            }
             Window::SetTitle(Unicode::Widen(jpg_files[file_idx]));
+            for (std::future<int>& raw_future : raw_futures) {
+                if (raw_future.valid() && raw_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                    raw_future.get();
+                }
+            }
             if (KeyEnter.down()) {
                 std::string raw_file = jpg_files[file_idx].substr(0, jpg_files[file_idx].size() - 4) + ".NEF";
+                std::cout << "copy " << jpg_files[file_idx] << " " << raw_file << std::endl;
                 try {
                     std::filesystem::copy(jpg_files[file_idx], out_dir, std::filesystem::copy_options::overwrite_existing);
                     std::filesystem::copy(raw_file, out_dir, std::filesystem::copy_options::overwrite_existing);
                 } catch (const std::filesystem::filesystem_error& e) {
                     std::cout << "Error copying file: " << e.what() << std::endl;
                 }
+                selected[file_idx] = true;
+            }
+            if (KeySpace.down() && selected[file_idx]) {
+                std::string filename = jpg_files[file_idx].substr(jpg_files[file_idx].find_last_of("\\") + 1);
+                filename = filename.substr(0, filename.size() - 4);
+                std::string raw_file_dst = out_dir + "/" + filename + ".NEF";
+                std::cout << "open " << raw_file_dst << std::endl;
+                raw_futures.emplace_back(std::async(std::launch::async, system, raw_file_dst.c_str()));
             }
             if (KeyRight.down()) {
                 file_idx = std::min(file_idx + 1, (int)jpg_files.size() - 1);
