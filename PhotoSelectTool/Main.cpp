@@ -172,6 +172,7 @@ void Main() {
                 std::cout << "Loaded " << jpg_files.size() << " files" << std::endl;
                 dir_loaded = true;
             }
+            font(U"<- / ->: move\nEnter: Copy Image\nSpace: Open Copied RAW file").draw(30, Arg::topLeft(100, 400), Palette::White);
         }
     }
 }
