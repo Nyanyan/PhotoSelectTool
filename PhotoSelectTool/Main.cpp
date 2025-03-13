@@ -1,16 +1,93 @@
 ﻿# include <Siv3D.hpp> // Siv3D v0.6.15
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <string>
 #include <filesystem>
 
+uint16_t read16(const std::vector<uint8_t>& data, size_t offset, bool little_endian) {
+    if (little_endian) {
+        return data[offset] | (data[offset + 1] << 8);
+    } else {
+        return (data[offset] << 8) | data[offset + 1];
+    }
+}
+
+uint32_t read32(const std::vector<uint8_t>& data, size_t offset, bool little_endian) {
+    if (little_endian) {
+        return data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
+    } else {
+        return (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+    }
+}
+
+int getOrientation(const std::string& file_path) {
+    std::ifstream file(file_path, std::ios::binary);
+    if (!file) {
+        std::cerr << "Failed to open file: " << file_path << std::endl;
+        return -1;
+    }
+
+    std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    file.close();
+
+    if (data.size() < 2 || data[0] != 0xFF || data[1] != 0xD8) {
+        std::cerr << "Not a valid JPEG file: " << file_path << std::endl;
+        return -1;
+    }
+
+    size_t offset = 2;
+    while (offset < data.size()) {
+        if (data[offset] != 0xFF) {
+            std::cerr << "Invalid marker at offset " << offset << std::endl;
+            return -1;
+        }
+
+        uint8_t marker = data[offset + 1];
+        uint16_t length = read16(data, offset + 2, false);
+
+        if (marker == 0xE1) { // APP1 marker (Exif)
+            size_t exif_offset = offset + 4;
+            // if (data.size() < exif_offset + 6 || std::string(data.begin() + exif_offset, data.begin() + exif_offset + 6) != "Exif\0\0") {
+            //     std::cerr << "Invalid Exif header" << std::endl;
+            //     std::cerr << data.size() << " " << exif_offset << std::endl;
+            //     return -1;
+            // }
+
+            size_t tiff_offset = exif_offset + 6;
+            bool is_little_endian = read16(data, tiff_offset, false) == 0x4949;
+            size_t ifd_offset = tiff_offset + read32(data, tiff_offset + 4, is_little_endian);
+
+            size_t num_entries = read16(data, ifd_offset, is_little_endian);
+            for (size_t i = 0; i < num_entries; ++i) {
+                size_t entry_offset = ifd_offset + 2 + i * 12;
+                uint16_t tag = read16(data, entry_offset, is_little_endian);
+                if (tag == 0x0112) { // Orientation tag
+                    uint16_t orientation = read16(data, entry_offset + 8, is_little_endian);
+                    return orientation;
+                }
+            }
+        }
+
+        offset += 2 + length;
+    }
+
+    std::cerr << "Orientation tag not found" << std::endl;
+    return -1;
+}
+
 void Main() {
+    constexpr int IMG_WIDTH = 6000;
+    constexpr int IMG_HEIGHT = 4000;
     Scene::SetBackground(Palette::Black);
     double scale = 0.3;
-    Size window_size = Size((int)(6000 * scale), (int)(4000 * scale));
+    double scale_v = scale * (double)IMG_HEIGHT / (double)IMG_WIDTH;
+    Size window_size = Size((int)(IMG_WIDTH * scale), (int)(IMG_HEIGHT * scale));
     Window::Resize(window_size);
     Window::SetTitle(U"PhotoSelectTool");
     const Font font{ FontMethod::MSDF, 48, Typeface::Bold };
+
+    Console.open();
 
     TextAreaEditState text_area[2];
 
@@ -19,6 +96,7 @@ void Main() {
     std::string in_dir, out_dir;
     std::vector<std::string> jpg_files;
     std::vector<Texture> textures;
+    std::vector<int> orientations;
 
     int file_idx = 0;
 
@@ -28,8 +106,19 @@ void Main() {
             if (textures.size() <= file_idx) {
                 const Texture texture{Unicode::Widen(jpg_files[file_idx])};
                 textures.emplace_back(texture);
+                int orientation = getOrientation(jpg_files[file_idx]);
+                orientations.emplace_back(orientation);
             }
-            textures[file_idx].scaled(scale).draw(0, 0);
+            if (orientations[file_idx] == 6) {
+                textures[file_idx].scaled(scale_v).rotated(90_deg).draw(IMG_WIDTH * (scale - scale_v) / 2, IMG_HEIGHT * (scale - scale_v) / 2);
+            } else if (orientations[file_idx] == 3) {
+                textures[file_idx].scaled(scale).rotated(180_deg).draw(0, 0);
+            } else if (orientations[file_idx] == 8) {
+                textures[file_idx].scaled(scale_v).rotated(270_deg).draw(IMG_WIDTH * (scale - scale_v) / 2, IMG_HEIGHT * (scale - scale_v) / 2);
+            } else {
+                textures[file_idx].scaled(scale).draw(0, 0);
+            }
+            //textures[file_idx].scaled(scale).draw(0, 0);
             Window::SetTitle(Unicode::Widen(jpg_files[file_idx]));
             if (KeyEnter.down()) {
                 std::string raw_file = jpg_files[file_idx].substr(0, jpg_files[file_idx].size() - 4) + ".NEF";
