@@ -31,6 +31,15 @@ void Main() {
             }
             textures[file_idx].scaled(scale).draw(0, 0);
             Window::SetTitle(Unicode::Widen(jpg_files[file_idx]));
+            if (KeyEnter.down()) {
+                std::string raw_file = jpg_files[file_idx].substr(0, jpg_files[file_idx].size() - 4) + ".NEF";
+                try {
+                    std::filesystem::copy(jpg_files[file_idx], out_dir, std::filesystem::copy_options::overwrite_existing);
+                    std::filesystem::copy(raw_file, out_dir, std::filesystem::copy_options::overwrite_existing);
+                } catch (const std::filesystem::filesystem_error& e) {
+                    std::cout << "Error copying file: " << e.what() << std::endl;
+                }
+            }
             if (KeyRight.down()) {
                 file_idx = std::min(file_idx + 1, (int)jpg_files.size() - 1);
             }
@@ -50,6 +59,7 @@ void Main() {
                         jpg_files.push_back(entry.path().string());
                     }
                 }
+                std::cout << "Loaded " << jpg_files.size() << " files" << std::endl;
                 dir_loaded = true;
             }
         }
