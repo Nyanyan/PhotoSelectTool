@@ -136,7 +136,7 @@ void Main() {
                 std::string raw_file = jpg_files[file_idx].substr(0, jpg_files[file_idx].size() - 4) + ".NEF";
                 std::cout << "copy " << jpg_files[file_idx] << " " << raw_file << std::endl;
                 try {
-                    std::filesystem::copy(jpg_files[file_idx], out_dir, std::filesystem::copy_options::overwrite_existing);
+                    //std::filesystem::copy(jpg_files[file_idx], out_dir, std::filesystem::copy_options::overwrite_existing);
                     std::filesystem::copy(raw_file, out_dir, std::filesystem::copy_options::overwrite_existing);
                 } catch (const std::filesystem::filesystem_error& e) {
                     std::cout << "Error copying file: " << e.what() << std::endl;
