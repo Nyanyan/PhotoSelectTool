@@ -77,15 +77,29 @@ int getOrientation(const std::string& file_path) {
     return -1;
 }
 
+struct JPG_Info {
+    Texture texture;
+    int orientation;
+    bool selected;
+};
+
+JPG_Info open_jpg(std::string filename) {
+    const Texture texture{Unicode::Widen(filename)};
+    int orientation = getOrientation(filename);
+    return {texture, orientation, false};
+}
+
 void Main() {
     constexpr int IMG_WIDTH = 6000;
     constexpr int IMG_HEIGHT = 4000;
+    constexpr double const_scale = 0.3;
     Scene::SetBackground(Palette::Black);
-    double scale = 0.3;
-    double scale_v = scale * (double)IMG_HEIGHT / (double)IMG_WIDTH;
-    Size window_size = Size((int)(IMG_WIDTH * scale), (int)(IMG_HEIGHT * scale));
+    // Size window_size = Size((int)(IMG_WIDTH * scale), (int)(IMG_HEIGHT * scale));
+    Size window_size = Size((int)(IMG_WIDTH * const_scale), (int)(IMG_HEIGHT * const_scale));
     Window::Resize(window_size);
     Window::SetTitle(U"PhotoSelectTool");
+    Window::SetStyle(WindowStyle::Sizable);
+    Scene::SetResizeMode(ResizeMode::Virtual);
     const Font font{ FontMethod::MSDF, 48, Typeface::Bold };
 
     Console.open();
@@ -103,58 +117,78 @@ void Main() {
     int file_idx = 0;
 
     std::vector<std::future<int>> raw_futures;
+    std::future<JPG_Info> jpg_future;
 
     while (System::Update()) {
 
         if (dir_loaded) {
             if (textures.size() <= file_idx) {
-                const Texture texture{Unicode::Widen(jpg_files[file_idx])};
-                textures.emplace_back(texture);
-                int orientation = getOrientation(jpg_files[file_idx]);
-                orientations.emplace_back(orientation);
-                selected.emplace_back(false);
-            }
-            if (orientations[file_idx] == 6) {
-                textures[file_idx].scaled(scale_v).rotated(90_deg).draw(IMG_WIDTH * (scale - scale_v) / 2, IMG_HEIGHT * (scale - scale_v) / 2);
-            } else if (orientations[file_idx] == 3) {
-                textures[file_idx].scaled(scale).rotated(180_deg).draw(0, 0);
-            } else if (orientations[file_idx] == 8) {
-                textures[file_idx].scaled(scale_v).rotated(270_deg).draw(IMG_WIDTH * (scale - scale_v) / 2, IMG_HEIGHT * (scale - scale_v) / 2);
+                if (jpg_future.valid()) {
+                    if (jpg_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                        JPG_Info jpg_info = jpg_future.get();
+                        textures.emplace_back(jpg_info.texture);
+                        orientations.emplace_back(jpg_info.orientation);
+                        selected.emplace_back(jpg_info.selected);
+                    }
+                } else {
+                    jpg_future = std::async(std::launch::async, open_jpg, jpg_files[file_idx]);
+                }
+                // const Texture texture{Unicode::Widen(jpg_files[file_idx])};
+                // textures.emplace_back(texture);
+                // int orientation = getOrientation(jpg_files[file_idx]);
+                // orientations.emplace_back(orientation);
+                // selected.emplace_back(false);
             } else {
-                textures[file_idx].scaled(scale).draw(0, 0);
-            }
-            if (selected[file_idx]) {
-                font(U"Selected").draw(30, Arg::topLeft(0, 0), Palette::Red);
-            }
-            Window::SetTitle(Unicode::Widen(jpg_files[file_idx]));
-            for (std::future<int>& raw_future : raw_futures) {
-                if (raw_future.valid() && raw_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-                    raw_future.get();
+                double size_x = Window::GetState().virtualSize.x;
+                double size_y = Window::GetState().virtualSize.y;
+                double scale_w = std::min((double)size_x / IMG_WIDTH, (double)size_y / IMG_HEIGHT);
+                double scale_v = std::min((double)size_x / IMG_HEIGHT, (double)size_y / IMG_WIDTH);
+                int x_c = size_x / 2;
+                int y_c = size_y / 2;
+                //std::cerr << size_x << " " << size_y << " " << window_scale << " " << scene_size_x << " " << scene_size_y << " " << scene_size_x / (double)IMG_WIDTH << " " << scene_size_y / (double)IMG_HEIGHT << std::endl;
+                //std::cerr << orientations[file_idx] << " " << size_x << " " << size_y << " | " << scale_w << " " << scale_v << " | " << x_w << " " << y_w << " " << x_v << " " << y_v << std::endl;
+                if (orientations[file_idx] == 6) {
+                    textures[file_idx].scaled(scale_v).rotated(90_deg).drawAt(x_c, y_c);
+                } else if (orientations[file_idx] == 3) {
+                    textures[file_idx].scaled(scale_w).rotated(180_deg).drawAt(x_c, y_c);
+                } else if (orientations[file_idx] == 8) {
+                    textures[file_idx].scaled(scale_v).rotated(270_deg).drawAt(x_c, y_c);
+                } else {
+                    textures[file_idx].scaled(scale_w).drawAt(x_c, y_c);
                 }
-            }
-            if (KeyEnter.down()) {
-                std::string raw_file = jpg_files[file_idx].substr(0, jpg_files[file_idx].size() - 4) + ".NEF";
-                std::cout << "copy " << jpg_files[file_idx] << " " << raw_file << std::endl;
-                try {
-                    //std::filesystem::copy(jpg_files[file_idx], out_dir, std::filesystem::copy_options::overwrite_existing);
-                    std::filesystem::copy(raw_file, out_dir, std::filesystem::copy_options::overwrite_existing);
-                } catch (const std::filesystem::filesystem_error& e) {
-                    std::cout << "Error copying file: " << e.what() << std::endl;
+                if (selected[file_idx]) {
+                    font(U"Selected").draw(30, Arg::topLeft(0, 0), Palette::Red);
                 }
-                selected[file_idx] = true;
-            }
-            if (KeySpace.down() && selected[file_idx]) {
-                std::string filename = jpg_files[file_idx].substr(jpg_files[file_idx].find_last_of("\\") + 1);
-                filename = filename.substr(0, filename.size() - 4);
-                std::string raw_file_dst = out_dir + "/" + filename + ".NEF";
-                std::cout << "open " << raw_file_dst << std::endl;
-                raw_futures.emplace_back(std::async(std::launch::async, system, raw_file_dst.c_str()));
-            }
-            if (KeyRight.down()) {
-                file_idx = std::min(file_idx + 1, (int)jpg_files.size() - 1);
-            }
-            if (KeyLeft.down()) {
-                file_idx = std::max(file_idx - 1, 0);
+                Window::SetTitle(Unicode::Widen(jpg_files[file_idx]));
+                for (std::future<int>& raw_future : raw_futures) {
+                    if (raw_future.valid() && raw_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                        raw_future.get();
+                    }
+                }
+                if (KeyEnter.down()) {
+                    std::string raw_file = jpg_files[file_idx].substr(0, jpg_files[file_idx].size() - 4) + ".NEF";
+                    std::cout << "copy " << jpg_files[file_idx] << " " << raw_file << std::endl;
+                    try {
+                        //std::filesystem::copy(jpg_files[file_idx], out_dir, std::filesystem::copy_options::overwrite_existing);
+                        std::filesystem::copy(raw_file, out_dir, std::filesystem::copy_options::overwrite_existing);
+                    } catch (const std::filesystem::filesystem_error& e) {
+                        std::cout << "Error copying file: " << e.what() << std::endl;
+                    }
+                    selected[file_idx] = true;
+                }
+                if (KeySpace.down() && selected[file_idx]) {
+                    std::string filename = jpg_files[file_idx].substr(jpg_files[file_idx].find_last_of("\\") + 1);
+                    filename = filename.substr(0, filename.size() - 4);
+                    std::string raw_file_dst = out_dir + "/" + filename + ".NEF";
+                    std::cout << "open " << raw_file_dst << std::endl;
+                    raw_futures.emplace_back(std::async(std::launch::async, system, raw_file_dst.c_str()));
+                }
+                if (KeyRight.down()) {
+                    file_idx = std::min(file_idx + 1, (int)jpg_files.size() - 1);
+                }
+                if (KeyLeft.down()) {
+                    file_idx = std::max(file_idx - 1, 0);
+                }
             }
         } else {
             font(U"Input Directory: ").draw(30, Arg::topRight(400, 50), Palette::White);
