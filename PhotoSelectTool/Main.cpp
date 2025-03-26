@@ -122,31 +122,26 @@ void Main() {
     while (System::Update()) {
 
         if (dir_loaded) {
-            if (textures.size() <= file_idx) {
-                if (jpg_future.valid()) {
-                    if (jpg_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-                        JPG_Info jpg_info = jpg_future.get();
-                        textures.emplace_back(jpg_info.texture);
-                        orientations.emplace_back(jpg_info.orientation);
-                        selected.emplace_back(jpg_info.selected);
-                    }
-                } else {
-                    jpg_future = std::async(std::launch::async, open_jpg, jpg_files[file_idx]);
+            if (jpg_future.valid()) {
+                if (jpg_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                    JPG_Info jpg_info = jpg_future.get();
+                    textures.emplace_back(jpg_info.texture);
+                    orientations.emplace_back(jpg_info.orientation);
+                    selected.emplace_back(jpg_info.selected);
                 }
-                // const Texture texture{Unicode::Widen(jpg_files[file_idx])};
-                // textures.emplace_back(texture);
-                // int orientation = getOrientation(jpg_files[file_idx]);
-                // orientations.emplace_back(orientation);
-                // selected.emplace_back(false);
             } else {
+                int load_file_idx = textures.size();
+                if (load_file_idx < jpg_files.size()) {
+                    jpg_future = std::async(std::launch::async, open_jpg, jpg_files[load_file_idx]);
+                }
+            }
+            if (textures.size() > file_idx) {
                 double size_x = Window::GetState().virtualSize.x;
                 double size_y = Window::GetState().virtualSize.y;
                 double scale_w = std::min((double)size_x / IMG_WIDTH, (double)size_y / IMG_HEIGHT);
                 double scale_v = std::min((double)size_x / IMG_HEIGHT, (double)size_y / IMG_WIDTH);
                 int x_c = size_x / 2;
                 int y_c = size_y / 2;
-                //std::cerr << size_x << " " << size_y << " " << window_scale << " " << scene_size_x << " " << scene_size_y << " " << scene_size_x / (double)IMG_WIDTH << " " << scene_size_y / (double)IMG_HEIGHT << std::endl;
-                //std::cerr << orientations[file_idx] << " " << size_x << " " << size_y << " | " << scale_w << " " << scale_v << " | " << x_w << " " << y_w << " " << x_v << " " << y_v << std::endl;
                 if (orientations[file_idx] == 6) {
                     textures[file_idx].scaled(scale_v).rotated(90_deg).drawAt(x_c, y_c);
                 } else if (orientations[file_idx] == 3) {
