@@ -92,7 +92,7 @@ JPG_Info open_jpg(std::string filename) {
 void Main() {
     constexpr int IMG_WIDTH = 6000;
     constexpr int IMG_HEIGHT = 4000;
-    constexpr double const_scale = 0.3;
+    constexpr double const_scale = 0.1;
     Scene::SetBackground(Palette::Black);
     // Size window_size = Size((int)(IMG_WIDTH * scale), (int)(IMG_HEIGHT * scale));
     Size window_size = Size((int)(IMG_WIDTH * const_scale), (int)(IMG_HEIGHT * const_scale));
@@ -186,11 +186,11 @@ void Main() {
                 }
             }
         } else {
-            font(U"Input Directory: ").draw(30, Arg::topRight(400, 50), Palette::White);
-            SimpleGUI::TextArea(text_area[0], Vec2{400, 50}, SizeF{1000, 30}, SimpleGUI::PreferredTextAreaMaxChars);
-            font(U"Output Directory: ").draw(30, Arg::topRight(400, 100), Palette::White);
-            SimpleGUI::TextArea(text_area[1], Vec2{400, 100}, SizeF{1000, 30}, SimpleGUI::PreferredTextAreaMaxChars);
-            if (SimpleGUI::Button(U"Load Directory", Vec2{ 1500, 75 }, 200)) {
+            font(U"Input Directory: ").draw(20, Arg::topRight(200, 50), Palette::White);
+            SimpleGUI::TextArea(text_area[0], Vec2{200, 50}, SizeF{300, 100}, SimpleGUI::PreferredTextAreaMaxChars);
+            font(U"Output Directory: ").draw(20, Arg::topRight(200, 200), Palette::White);
+            SimpleGUI::TextArea(text_area[1], Vec2{200, 200}, SizeF{300, 100}, SimpleGUI::PreferredTextAreaMaxChars);
+            if (SimpleGUI::Button(U"Load Directory", { window_size.x / 2 - 100, 330 }, 200)) {
                 in_dir = text_area[0].text.narrow();
                 out_dir = text_area[1].text.narrow();
                 for (const auto& entry : std::filesystem::directory_iterator(in_dir)) {
@@ -201,7 +201,7 @@ void Main() {
                 std::cout << "Loaded " << jpg_files.size() << " files" << std::endl;
                 dir_loaded = true;
             }
-            font(U"<- / ->: move\nEnter: Copy Image\nSpace: Open Copied RAW file").draw(30, Arg::topLeft(100, 400), Palette::White);
+            font(U"<- / ->: move\nEnter: Copy RAW Image\nSpace: Open Copied RAW file").draw(10, Arg::topLeft(30, 300), Palette::White);
         }
     }
 }
