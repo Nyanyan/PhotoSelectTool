@@ -119,6 +119,10 @@ void Main() {
     std::vector<std::future<int>> raw_futures;
     std::future<JPG_Info> jpg_future;
 
+    double user_scale = 1.0;
+    double user_center_x = 0.5;
+    double user_center_y = 0.5;
+
     while (System::Update()) {
 
         if (dir_loaded) {
@@ -138,10 +142,24 @@ void Main() {
             if (textures.size() > file_idx) {
                 double size_x = Window::GetState().virtualSize.x;
                 double size_y = Window::GetState().virtualSize.y;
-                double scale_w = std::min((double)size_x / IMG_WIDTH, (double)size_y / IMG_HEIGHT);
-                double scale_v = std::min((double)size_x / IMG_HEIGHT, (double)size_y / IMG_WIDTH);
-                int x_c = size_x / 2;
-                int y_c = size_y / 2;
+
+                // scale
+                user_scale += -Mouse::Wheel() * 0.2;
+                user_scale = std::max(1.0, user_scale);
+                // pos
+                if (MouseL.pressed()) {
+                    Cursor::RequestStyle(CursorStyle::Hand);
+                    //std::cerr << Cursor::Delta().x << " " << Cursor::Delta().y << " | " << user_center_x << " " << user_center_y << std::endl;
+                    user_center_x += (double)Cursor::Delta().x / size_x;
+                    user_center_y += (double)Cursor::Delta().y / size_y;
+                    user_center_x = Clamp(user_center_x, 0.0, 1.0);
+                    user_center_y = Clamp(user_center_y, 0.0, 1.0);
+                }
+
+                double scale_w = std::min((double)size_x / IMG_WIDTH, (double)size_y / IMG_HEIGHT) * user_scale;
+                double scale_v = std::min((double)size_x / IMG_HEIGHT, (double)size_y / IMG_WIDTH) * user_scale;
+                int x_c = user_center_x * size_x;
+                int y_c = user_center_y * size_y;
                 if (orientations[file_idx] == 6) {
                     textures[file_idx].scaled(scale_v).rotated(90_deg).drawAt(x_c, y_c);
                 } else if (orientations[file_idx] == 3) {
@@ -180,9 +198,15 @@ void Main() {
                 }
                 if (KeyRight.down()) {
                     file_idx = std::min(file_idx + 1, (int)jpg_files.size() - 1);
+                    user_center_x = 0.5;
+                    user_center_y = 0.5;
+                    user_scale = 1.0;
                 }
                 if (KeyLeft.down()) {
                     file_idx = std::max(file_idx - 1, 0);
+                    user_center_x = 0.5;
+                    user_center_y = 0.5;
+                    user_scale = 1.0;
                 }
             }
         } else {
