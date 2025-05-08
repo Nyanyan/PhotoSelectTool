@@ -1,4 +1,8 @@
 PhotoSelectTool/.vs
 PhotoSelectTool/*.vcxproj.user
-PhotoSelectTool/App
+PhotoSelectTool/App/*
+!PhotoSelectTool/App/dll
+!PhotoSelectTool/App/engine
+!PhotoSelectTool/App/Resource.rc
+!PhotoSelectTool/App/icon.ico
 PhotoSelectTool/Intermediate
